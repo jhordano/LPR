@@ -48,6 +48,12 @@ print('Standar deviation',std)
 
 plt.plot(data_s.index ,data_s.Return)
 
-
+# %%
+data = data[data['year'] >= 1953]
+data_t = pd.read_table('Bonos.csv',sep=';')
+data_t['Date'] = pd.to_datetime(data_t.Date,format='%d-%m-%Y')
+data_t['year'] = data_t.Date.dt.year
+data_t = data_t[data_t['year'] <= 1984]
+data_c = pd.merge(data,data_t,on='Date')
 
 
