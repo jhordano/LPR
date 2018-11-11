@@ -18,11 +18,11 @@ data['Date'] = pd.to_datetime(data.Date,format='%Y-%m-%d')
 data['year'] = data.Date.dt.year
 data = data[data['year'] <= 1984] 
 
-data_r = pd.DataFrame((data.Close - data.Close.shift(1))/data.Close.shift(1))  
-data_r['da'] = data.Date
-data_r['dat'] = pd.to_datetime(data_r.da,format='%Y-%m-%d')
-data_r['year'] = data_r.dat.dt.year
-data_r['mm'] = data_r.dat.dt.month
+data['Return'] = pd.DataFrame((data.Close - data.Close.shift(1))/data.Close.shift(1))  
+data['da'] = data.Date
+data['dat'] = pd.to_datetime(data.da,format='%Y-%m-%d')
+data['year'] = data.dat.dt.year
+data['mm'] = data.dat.dt.month
 
 #data_s = data_r.groupby(['year','mm'])['Close'].mean()        
 #data_s = data_r.groupby(['year','mm'])['Close'].agg(lambda x: x.sum())        
@@ -35,11 +35,19 @@ def var(a):
     for i in range(0,len(a)-2):    
         c.append(a[i+1]*a[i])
         
-    return np.sum(v) + 2*np.sum(c) 
+    return np.sqrt(np.sum(v) + 2*np.sum(c))
 
-data_s = pd.DataFrame(data_r.groupby(['year','mm'])['Close'].agg(var)).reset_index()
+data_s = pd.DataFrame(data.groupby(['year','mm'])['Return'].agg(var)).reset_index()
+data_s = data_s[data_s['year']>= 1953] 
+
+mean = data_s.Return.mean()
+std = data_s.Return.std()
+
+print('Mean value',mean)
+print('Standar deviation',std)
+
+plt.plot(data_s.index ,data_s.Return)
 
 
-plt.plot(data_s.index ,data_s.Close)
 
 
