@@ -33,6 +33,30 @@ model_fit.summary()
 #pyplot.show()
 
 
+
+# %%
+
+import datetime as dt
+
+import pandas_datareader.data as web
+
+from arch import arch_model
+from arch.univariate import ConstantMean, GARCH, Normal
+#from arch.univariate import ZeroMean, GARCH, Normal
+
+start = dt.datetime(2000, 1, 1)
+end = dt.datetime(2014, 1, 1)
+sp500 = web.DataReader('^GSPC', 'yahoo', start=start, end=end)
+returns = 100 * sp500['Adj Close'].pct_change().dropna()
+
+am = ConstantMean(returns)
+am.volatility = GARCH(1, 0, 1)
+am.distribution = Normal()
+
+res = am.fit()
+
+res.summary()
+
 # %%
 
 # import the packages
@@ -165,23 +189,50 @@ sm_probit_canned = sm.Probit(endog, exog).fit()
 import numpy as np
 from scipy import stats
 from statsmodels.base.model import GenericLikelihoodModel
-
+import math 
 
 # (1/np.sqrt(scale*2*math.pi))*np.exp(-0.5*np.power((1-loc)/scale,2))
     
 # Estimation of a GARCH model by ML.
 
-def cun_pmf(x, rho_0, rho_1):
-    if rho_0 < 0 or rho_1 < 0 :
-        return np.zeros_like(x)
+def cun_pmf(x, rho_0, rho_1, rho_2 , mu):
+    tst = (1 - rho_1 - rho_2)
+    if tst != 0:
+        ivar = rho_0/(1 - rho_1 - rho_2)
     else:
-        LogL = 0
-        for i in range(1,len(x)):
-            std =  rho_0 + rho_1*np.power(x[i-1],2)
-            LL = np.power(x[i],2)/std + np.log(std)
-            LogL = LogL + LL
+        ivar = 0.01
+    # compute residuals
+    #e = x - mu
+
+    n = len(x)
+    e = np.zeros(n)    
+    ss = np.sum(e*e)/(n-4)
+    
+    # generate sigt and log likelihood
+    sigt = np.zeros(n);
+    loglik = np.zeros(n);
+
+    for i in range(n):
+        if i == 0:
+            sigt[0] = rho_0 + rho_1*ss + rho_2*ss;
+            e[0] = x[0] - mu*np.sqrt(sigt[0])
+        else:
             
-    return LogL
+            sigt[i] = rho_0 + rho_1*sigt[i-1] + rho_2*e[i-1]*e[i-1];
+            e[i] = x[i] - mu*np.sqrt(sigt[i])
+        
+        loglik[i] = -0.5*(np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i]);
+    
+    #if rho_0 < 0 or rho_1 < 0 :
+    #    return np.zeros_like(x)
+    #else:
+    #    LogL = 0
+    #    for i in range(1,len(x)):
+    #        std =  rho_0 + rho_1*np.power(x[i-1],2)
+    #        LL = np.power(x[i],2)/std + np.log(std)
+    #        LogL = LogL + LL
+            
+    return -np.sum(loglik)
 
 # %%
 class arch_c(GenericLikelihoodModel):
@@ -195,11 +246,13 @@ class arch_c(GenericLikelihoodModel):
        # mean = 0  params[0] +
         rho_0 = params[0]
         rho_1 = params[1]
+        rho_2 = params[2]
+        mu = params[3]
         #std = params[0] + params[1]*self.endog
 
       #  return -np.log( stats.norm.pdf(self.endog, mean, std))
       #  return np.power(self.endog,2)/np.power(std,2) + np.log(np.power(std,2))
-        return cun_pmf(self.endog,rho_0,rho_1)
+        return cun_pmf(self.endog,rho_0,rho_1,rho_2,mu)
       #  return LogL
     
     def fit(self, start_params=None, maxiter=10000, maxfun=5000, **kwds):
@@ -207,18 +260,22 @@ class arch_c(GenericLikelihoodModel):
         #    lambda_start = self.endog.mean()
         #    excess_zeros = (self.endog == 0).mean() - stats.poisson.pmf(0, lambda_start)
             
-        start_params = np.array([1, 0.5])
+        start_params = np.array([0.1,0.1, 0.5,1])
             
         return super(arch_c, self).fit(start_params=start_params, maxiter=maxiter, maxfun=maxfun, **kwds)
 
-model = arch_c(train)
+model = arch_c(returns)
 results = model.fit()
 results.summary()
 
 # %%
 
-for i in range(1,len(data)):
-    print(data[i-1])
-    print(i-1)
+for i in range(len(data)):
+     if i == 0:
+       print(data[i])
+       print('value',i)
+     else:
+       print(data[i])         
+       print(i)
     
     
