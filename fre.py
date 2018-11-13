@@ -18,7 +18,7 @@ data['Date'] = pd.to_datetime(data.Date,format='%Y-%m-%d')
 data['year'] = data.Date.dt.year
 data = data[data['year'] <= 1984] 
 
-data['Return'] = pd.DataFrame((data.Close - data.Close.shift(1))/data.Close.shift(1))  
+data['Return'] = pd.DataFrame(((data.Close - data.Close.shift(1))/data.Close.shift(1))*100)  
 data['da'] = data.Date
 data['dat'] = pd.to_datetime(data.da,format='%Y-%m-%d')
 data['year'] = data.dat.dt.year
@@ -55,5 +55,10 @@ data_t['Date'] = pd.to_datetime(data_t.Date,format='%d-%m-%Y')
 data_t['year'] = data_t.Date.dt.year
 data_t = data_t[data_t['year'] <= 1984]
 data_c = pd.merge(data,data_t,on='Date')
+data_c['average'] = data_c.groupby(['year_y'])['DTB3'].transform(max)
 
 
+# test_df2.reset_index(name='maxvalue').to_string(index=False)
+
+
+# https://stackoverflow.com/questions/15705630/python-getting-the-row-which-has-the-max-value-in-groups-using-groupby
