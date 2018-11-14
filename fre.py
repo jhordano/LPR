@@ -49,6 +49,8 @@ print('Standar deviation',std)
 plt.plot(data_s.index ,data_s.Return)
 
 # %%
+
+
 data = data[data['year'] >= 1953]
 data_t = pd.read_table('Bonos.csv',sep=';')
 data_t['Date'] = pd.to_datetime(data_t.Date,format='%d-%m-%Y')
@@ -65,9 +67,12 @@ data_c['average'] = data_c.groupby(['year_y'])['DTB3'].transform(max)
 
 
 # %%
+
 data_crsp = pd.read_table('crsp.csv',sep=',')
 data_crsp['Date'] = pd.to_datetime(data_crsp.date,format='%Y%m')
 data_crsp['crsp'] = data_crsp['Mkt-RF'] + data_crsp['RF']
+data_crsp = data_crsp.rename(columns={'Mkt-RF':'spread'})
 data_crsp['year'] = data_crsp.Date.dt.year
 mean_crsp = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].crsp)
-mean_crsp_1 = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].Mkt-RF)
+mean_crsp_1 = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
+
