@@ -55,11 +55,29 @@ data = data[data['year'] >= 1953]
 data_t = pd.read_table('Bonos.csv',sep=';')
 data_t['Date'] = pd.to_datetime(data_t.Date,format='%d-%m-%Y')
 data_t['year'] = data_t.Date.dt.year
+data_t['month'] = data_t.Date.dt.month
+data_t['select'] = data_t['year']*100 + data_t['month'] 
+
 data_t = data_t[data_t['year'] <= 1984]
+
+
 data_c = pd.merge(data,data_t,on='Date')
-data_c['average'] = data_c.groupby(['year_y'])['DTB3'].transform(max)
 
+e_mon = lambda x: (x-x.mean())   
 
+#data_c['average'] = data_c.groupby(['year_y'])['DTB3'].transform(max)
+#data_c['average'] = data_c.groupby(['year_y'])['DTB3'].transform(max)
+
+data_c['Date'].idxmax()
+#df.loc[df['Value'].idxmax()]
+
+#data_c.groupby(['select'])[['Date']].max().xs('DTB3',axis=1)
+
+data_p =  data_c[data_c.groupby(['select'])['Date'].transform(max) == data_c['Date']]['DTB3']
+data_p = data_p.rename(columns={'DTB3':'st'})
+data_p = data_p.reindex(range(len(data_c)), method='bfill')
+
+data_c['tbil'] = data_p
 # test_df2.reset_index(name='maxvalue').to_string(index=False)
 
 
@@ -74,5 +92,16 @@ data_crsp['crsp'] = data_crsp['Mkt-RF'] + data_crsp['RF']
 data_crsp = data_crsp.rename(columns={'Mkt-RF':'spread'})
 data_crsp['year'] = data_crsp.Date.dt.year
 mean_crsp = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].crsp)
+
 mean_crsp_1 = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
+mean_crsp_2 = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1952)].spread)
+mean_crsp_3 = np.mean(data_crsp[(data_crsp['year']>=1953) & (data_crsp['year']<=1984)].spread)
+
+std_crsp_1 = np.std(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
+std_crsp_2 = np.std(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1952)].spread)
+std_crsp_3 = np.std(data_crsp[(data_crsp['year']>=1953) & (data_crsp['year']<=1984)].spread)
+
+
+# http://pbpython.com/python-vis-flowchart.html
+
 
