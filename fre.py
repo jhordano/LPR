@@ -18,7 +18,8 @@ from statsmodels.tsa.arima_model import ARIMA
 data = pd.read_table("sp500L.csv",sep=";")
 data['Date'] = pd.to_datetime(data.Date,format='%Y%m%d')
 data['year'] = data.Date.dt.year
-data['Return_excD'] = data['Return_excD']*100 
+data['Return_excD'] = data['Return_excD']
+
 #data = data[data['year'] <= 1984] 
 
 #data['Return'] = pd.DataFrame(((data.Close - data.Close.shift(1))/data.Close.shift(1))*100)  
@@ -42,9 +43,12 @@ def var(a):
 
 data_m = pd.DataFrame(data.groupby(['year','mm'])['Return_excD'].agg(var)).reset_index()
 data_m = data_m.rename(columns={'Return_excD':'volatility'})
+data_m['volatility_2'] = np.power(data_m['volatility'],2)
+
 data_m['Date'] = pd.to_datetime(dict(year=data_m.year, month=data_m.mm,day=1))
 data_m['Ln_vol'] = np.log(data_m['volatility'])
 data_m['PC_vol'] = ((data_m.volatility - data_m.volatility.shift(1))/data_m.volatility.shift(1))*100  
+
 
 data_m = data_m[data_m['year'] <= 1984] 
 data_m = data_m[data_m['year'] >= 1928]
@@ -67,10 +71,20 @@ print(model_fit.summary())
 
 data_m['fit'] = model_fit.predict(typ='levels')
 data_m['std_fit'] = np.exp(data_m['fit']  + 0.5*np.var(model_fit.resid))
-data_m['std_fit'][0] = data_m['volatility'][0]
-data_m['var_fit'] = np.exp(2*data_m['fit']  + 2*np.var(model_fit.resid))
-
 plt.plot(data_m.Date ,data_m.std_fit)
+
+data_m = data_m.reset_index(drop=True)
+
+data_m.set_value(0,'std_fit' , data_m.iloc[0]['volatility'])
+data_m['Unp_std'] = data_m['volatility'] - data_m['std_fit']
+
+data_m['var_fit'] = np.exp(2*data_m['fit']  + 2*np.var(model_fit.resid))
+data_m.set_value(0,'var_fit' , data_m.iloc[0]['volatility_2'])
+data_m['Unp_var'] = data_m['volatility_2'] - data_m['var_fit']
+
+
+
+
 
 
 # %% ARCH model
@@ -212,10 +226,12 @@ results.summary()
 
 # %%
 data_m = data_m.reset_index(drop=True)
-data_m['spread'] = np.array(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
+data_m['spread'] = np.array(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread/100)
+
 #data_m = data_m[(data_m['year']>=1953) & (data_m['year']<=1984)]
 mean_crsp = np.mean(data_m['spread'])
 std_crsp = np.std(data_m['spread'])
+    
 mean_crsp_b = np.sum(data_m['spread']/data_m['volatility'])/(np.sum(1/data_m['volatility']))
 mean_crsp_c = np.sum(data_m['spread']/data_m['std_fit'])/(np.sum(1/data_m['std_fit']))
 # std_fit
@@ -223,16 +239,31 @@ mean_crsp_c = np.sum(data_m['spread']/data_m['std_fit'])/(np.sum(1/data_m['std_f
 res_ols = sm.OLS(data_m['spread'], np.zeros(len(data_m['spread']))-1).fit()
 print(res_ols.summary())
 
-mod_wls = sm.WLS(data_m['spread'], np.zeros(len(data_m['spread']))-1,weights=1./data_m['volatility'])
+mod_wls = sm.WLS(data_m['spread'], np.zeros(len(data_m['spread']))-1, weights=1./data_m['volatility'])
 res_wls = mod_wls.fit()
 print(res_wls.summary())
 
 
 # %% Part 3     Estimating relations between risk premiums and volatility
 
-mod_wls = sm.WLS(data_m['spread'], data_m['std_fit'] , weights=1./data_m['std_fit'])
-res_wls = mod_wls.fit()
-print(res_wls.summary())
+#mod_wls = sm.WLS(data_m['spread'], data_m['std_fit'], weights=1./data_m['volatility'])
+#res_wls = mod_wls.fit()
+#print(res_wls.summary())
 
+#X = np.concatenate((np.array(data_m['std_fit']).reshape(684,1) , np.ones( (len(data_m['std_fit']),1))), axis=1)
+X = np.concatenate(( np.ones( (len(data_m['std_fit']),1)) , np.array(data_m['std_fit']).reshape(684,1) ) , axis=1)
+y = np.array(data_m['spread'])
+Om = np.diag(1/data_m['std_fit'])
+
+beta = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X),Om),X)), np.matmul(np.matmul(np.transpose(X),Om),y) )
       
+X_1 = np.concatenate(( np.ones( (len(data_m['std_fit']),1)) , np.array(data_m['std_fit']).reshape(684,1) , np.array(data_m['Unp_std']).reshape(684,1) ) , axis=1)
+beta_1 = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_1),Om),X_1)), np.matmul(np.matmul(np.transpose(X_1),Om),y) )
 
+
+
+X_v = np.concatenate(( np.ones( (len(data_m['var_fit']),1)) , np.array(data_m['var_fit']).reshape(684,1) ) , axis=1)
+
+beta_v = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X),Om),X)), np.matmul(np.matmul(np.transpose(X),Om),y) )     
+X_1 = np.concatenate(( np.ones( (len(data_m['var_fit']),1)) , np.array(data_m['var_fit']).reshape(684,1) , np.array(data_m['Unp_var']).reshape(684,1) ) , axis=1)
+beta_v_1 = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_1),Om),X_1)), np.matmul(np.matmul(np.transpose(X_1),Om),y) )
