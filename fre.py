@@ -290,19 +290,13 @@ print(results_v_u.summary())
 
 # %% Estimation of the GARCH-M model
 from arch.univariate import ConstantMean, GARCH
-def lik_g_m(x, params):
-    mu = params[0]
-    beta = params[1]
-    theta = params[2]
-    a = params[3]
-    b = params[4]
-    c_1 = params[5]
-    c_2 = params[6]
+
+def lik_g_m(x, mu,beta,theta,a,b,c_1,c_2):
     
     # compute residuals
     n = len(x)
+    ss = np.std(x)
     e = np.zeros(n)    
-    ss = np.sum(e*e)/(n-4)
     # generate sigt and log likelihood
     sigt = np.zeros(n)  ;
     loglik = np.zeros(n);
@@ -311,11 +305,13 @@ def lik_g_m(x, params):
         if i <= 1:
             sigt[i] = a + b*ss + c_1 + c_2;
             e[i] = x[i] - mu - theta*ss 
-        else:
-            sigt[i] = a + b*sigt[i-1] + c_1*e[i-1]*e[i-1] + c_2*e[i-2]*e[i-2] ;
-            e[i] = x[i] - mu - beta*np.sqrt(sigt[i]) + theta*e[i-1]    
             
-        loglik[i] = -0.5*( np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i] );
+            loglik[i] = -0.5*( np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i] )            
+        else:
+            sigt[i] = a + b*sigt[i-1] + c_1*e[i-1]*e[i-1] + c_2*e[i-2]*e[i-2] 
+#            e[i] = x[i] - mu - beta*np.sqrt(sigt[i]) + theta*e[i-1]
+            e[i] = x[i] - mu - beta*sigt[i] + theta*e[i-1]
+            loglik[i] = -0.5*( np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i] )
                 
     return -np.sum(loglik)
 
@@ -350,16 +346,17 @@ class garch_m(GenericLikelihoodModel):
         gar_0.volatility = GARCH(p=2, q=1)
         gar_0_r = gar_0.fit()
         gar_pa_0 = np.array(gar_0_r.params)
-        sigma_2 = np.sqrt(gar_0_r.conditional_volatility)
+        sigma_2 = gar_0_r.conditional_volatility
+#        sigma_2 = np.sqrt(gar_0_r.conditional_volatility)
         
-        mean_0 = statsmodels.tsa.arima_model.ARMA(data['spread'],exog=sigma_2,order=(0,1))
+        mean_0 = statsmodels.tsa.arima_model.ARMA( data['spread'] ,exog=sigma_2,order=(0,1))
         mean_0_r = mean_0.fit()
         mean_pa_0 = np.array(mean_0_r.params)        
         
-#        start_params = np.concatenate([ [-0.001],[0.073],[-0.157] , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])        
-        start_params = np.array([ -0.001, 0.073, -0.157 , 0.00006 , 0.918 , 0.121, -0.157 ])        
-    #    start_params = np.concatenate([ mean_pa_0 , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])
-            
+     #       start_params = np.concatenate([ [-0.001],[0.073],[-0.157] , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])        
+    #   start_params = np.array([ -0.001, 0.073, -0.157 , 0.00006 , 0.918 , 0.121, -0.043 ])        
+#        start_params = np.concatenate([ mean_pa_0 , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])
+        start_params = np.array([ 0.201, 2.41, -0.157 , 0.00006 , 0.918 , 0.121, -0.043 ])                    
         return super(garch_m, self).fit(start_params=start_params, maxiter=maxiter, maxfun = maxfun, **kwds)
 
 # %% table 5
@@ -381,10 +378,10 @@ gar_0 = ConstantMean(data['spread'])
 gar_0.volatility = GARCH(p=2, q=1)
 gar_0_r = gar_0.fit()
 gar_pa_0 = np.array(gar_0_r.params)
-sigma_2 = np.sqrt(gar_0_r.conditional_volatility)
-
+# %%
+sigma_2 = gar_0_r.conditional_volatility
 X = sm.add_constant(sigma_2)         
 #mean_0 = sm.tsa.ARMA(data['spread'], order=(0,1))
 mean_0 = statsmodels.tsa.arima_model.ARMA(data['spread'],exog=sigma_2,order=(0,1))
 mean_0_r = mean_0.fit()
-gar_pa_0 = np.array(mean_0_r.params)
+mean_pa_0 = np.array(mean_0_r.params)
