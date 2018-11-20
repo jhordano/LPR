@@ -15,22 +15,16 @@ import matplotlib.pyplot as plt
 import statsmodels
 import statsmodels.api as sm
 from statsmodels.tsa.arima_model import ARIMA
+from prettytable import PrettyTable
 
 data = pd.read_table("sp500L.csv",sep=";")
 data['Date'] = pd.to_datetime(data.Date,format='%Y%m%d')
 data['year'] = data.Date.dt.year
 data['Return_excD'] = data['Return_excD']
-
-#data = data[data['year'] <= 1984] 
-
-#data['Return'] = pd.DataFrame(((data.Close - data.Close.shift(1))/data.Close.shift(1))*100)  
-#data['da'] = data.Date
-#data['dat'] = pd.to_datetime(data.da,format='%Y-%m-%d')
-#data['year'] = data.Date.dt.year
 data['mm'] = data.Date.dt.month
 
-#data_s = data_r.groupby(['year','mm'])['Close'].mean()        
-#data_s = data_r.groupby(['year','mm'])['Close'].agg(lambda x: x.sum())        
+#data['Return'] = pd.DataFrame(((data.Close - data.Close.shift(1))/data.Close.shift(1))*100)  
+
 def var(a):
     v = []
     c = []
@@ -84,7 +78,26 @@ data_m.set_value(0,'var_fit' , data_m.iloc[0]['volatility_2'])
 data_m['Unp_var'] = data_m['volatility_2'] - data_m['var_fit']
 
 
-
+class table_1(object):
+    def __init__(self, data):
+        #self.f = f
+        self.data = data
+        
+    def compt(self):
+        model = ARIMA(self.data['Ln_vol'] ,order=(0,1,3))
+        model_fit = model.fit(disp=0)
+        return model_fit
+   
+    def table(self):
+        t = self.compt()
+        coef = t.params
+        x = PrettyTable()
+        x.field_names = ["theta_0", "theta_1", "theta_2", "theta_3"]
+        x.add_row(coef)
+        return t.params
+    
+          
+    
 
 
 
