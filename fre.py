@@ -16,6 +16,7 @@ import statsmodels
 import statsmodels.api as sm
 from statsmodels.tsa.arima_model import ARIMA
 from prettytable import PrettyTable
+from tabulate import tabulate
 
 data = pd.read_table("sp500L.csv",sep=";")
 data['Date'] = pd.to_datetime(data.Date,format='%Y%m%d')
@@ -45,8 +46,8 @@ data_m['Ln_vol'] = np.log(data_m['volatility'])
 data_m['PC_vol'] = ((data_m.volatility - data_m.volatility.shift(1))/data_m.volatility.shift(1))*100  
 
 
-data_m = data_m[data_m['year'] <= 1984] 
-data_m = data_m[data_m['year'] >= 1928]
+data_m = data_m[(data_m['year'] <= 1984) & (data_m['year'] >= 1928)] 
+
 
 #data_s = data_s[data_s['year']>= 1953] 
 
@@ -77,28 +78,51 @@ data_m['var_fit'] = np.exp(2*data_m['fit']  + 2*np.var(model_fit.resid))
 data_m.set_value(0,'var_fit' , data_m.iloc[0]['volatility_2'])
 data_m['Unp_var'] = data_m['volatility_2'] - data_m['var_fit']
 
-
+# %%
 class table_1(object):
-    def __init__(self, data):
+    def __init__(self, data, year_comp):
         #self.f = f
         self.data = data
-        
+        self.year_comp = year_comp        
     def compt(self):
         model = ARIMA(self.data['Ln_vol'] ,order=(0,1,3))
-        model_fit = model.fit(disp=0)
+        model_fit = model.fit(start_params = np.array([0, 0, 0, 0]) ,disp=0)
         return model_fit
    
     def table(self):
         t = self.compt()
-        coef = t.params
-        x = PrettyTable()
-        x.field_names = ["theta_0", "theta_1", "theta_2", "theta_3"]
-        x.add_row(coef)
-        return t.params
+        coef = np.array(t.params)
+        H1 = np.array(["theta_0", "theta_1", "theta_2", "theta_3"])
+        table = tabulate([coef], headers = H1, floatfmt=".4f") 
+        return table
     
-          
-    
+    def table_comp(self):
+        t = self.compt()
+        year_comp = self.year_comp
 
+        if year_comp == 0:
+            fre_p = []
+            ind = 1
+        elif year_comp == 1:
+            fre_p = np.array([0, 0.524, 0.158, 0.09])    
+            ind = 2
+        elif year_comp == 2:
+            fre_p = np.array([-0.0012, 0.552, 0.193, 0.031])    
+            ind = 2
+        else:
+            fre_p = np.array([0.0010, 0.506, 0.097 , 0.161])    
+            ind = 2
+             
+        H1 = np.array(["theta_0", "theta_1", "theta_2", "theta_3"])        
+#        fre_p = np.array([0, 0.524, 0.158, 0.09])
+        coef = np.array(t.params)
+        
+        d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
+        table = tabulate(d_p , headers = H1, floatfmt=".4f") 
+        return table          
+    
+tab_1 = table_1(data_m[(data_m['year'] >= 1928) & (data_m['year'] <= 1952)  ] , 2)
+print(tab_1.table_comp())
 
 
 # %% ARCH model
