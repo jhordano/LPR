@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 import statsmodels
 import statsmodels.api as sm
 from statsmodels.tsa.arima_model import ARIMA
-from prettytable import PrettyTable
 from tabulate import tabulate
+from scipy.stats import skew
 
 data = pd.read_table("sp500L.csv",sep=";")
 data['Date'] = pd.to_datetime(data.Date,format='%Y%m%d')
@@ -33,8 +33,7 @@ def var(a):
     for i in range(0,len(a)-1):
         v.append(a[i]*a[i])
     for i in range(0,len(a)-2):    
-        c.append(a[i+1]*a[i])
-        
+        c.append(a[i+1]*a[i])     
     return np.sqrt(np.sum(v) + 2*np.sum(c))
 
 data_m = pd.DataFrame(data.groupby(['year','mm'])['Return_excD'].agg(var)).reset_index()
@@ -43,33 +42,19 @@ data_m['volatility_2'] = np.power(data_m['volatility'],2)
 
 data_m['Date'] = pd.to_datetime(dict(year=data_m.year, month=data_m.mm,day=1))
 data_m['Ln_vol'] = np.log(data_m['volatility'])
-data_m['PC_vol'] = ((data_m.volatility - data_m.volatility.shift(1))/data_m.volatility.shift(1))*100  
-
-
-data_m = data_m[(data_m['year'] <= 1984) & (data_m['year'] >= 1928)] 
-
-
-#data_s = data_s[data_s['year']>= 1953] 
-
-mean = data_m.volatility.mean()
-std = data_m.volatility.std()
-
-mean_pc = data_m.PC_vol.mean()
-
-print('Mean value',mean)
-print('Standar deviation',std)
+#data_m['PC_vol'] = ((data_m.volatility - data_m.volatility.shift(1))/data_m.volatility.shift(1))*100  
 
 plt.plot(data_m.Date ,data_m.volatility)
-
 model = ARIMA(data_m['Ln_vol'],order=(0,1,3))
 model_fit = model.fit(disp=0)
-print(model_fit.summary())
 
 data_m['fit'] = model_fit.predict(typ='levels')
+data_m['fit'] = data_m['fit'].fillna(np.mean(data_m['fit']))
+
 data_m['std_fit'] = np.exp(data_m['fit']  + 0.5*np.var(model_fit.resid))
 plt.plot(data_m.Date ,data_m.std_fit)
-
-data_m = data_m.reset_index(drop=True)
+# %%
+#data_m = data_m.reset_index(drop=True)
 
 data_m.set_value(0,'std_fit' , data_m.iloc[0]['volatility'])
 data_m['Unp_std'] = data_m['volatility'] - data_m['std_fit']
@@ -96,33 +81,49 @@ class table_1(object):
         table = tabulate([coef], headers = H1, floatfmt=".4f") 
         return table
     
-    def table_comp(self):
+    
+    def table_comp_a(self):
+        year_comp = self.year_comp        
+        mean = self.data.volatility.mean()
+        std = self.data.volatility.std()
+        skw = skew(self.data.volatility)
+        ind = 2
+        if year_comp == 0:
+            fre_p = []
+            ind = 1
+        elif year_comp == 1:
+            fre_p = np.array([0.0474, 0.0325, 2.80])    
+        elif year_comp == 2:
+            fre_p = np.array([0.0607, 0.0417, 2.08])    
+        else:
+            fre_p = np.array([0.0371, 0.0168, 1.70])    
+        H1 = np.array(["mean", "std dev", "Skewness"])        
+        coef = np.array([mean,std,skw])        
+        d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
+        table = tabulate(d_p , headers = H1, floatfmt=".4f") 
+        return table          
+
+    def table_comp_b(self):
         t = self.compt()
         year_comp = self.year_comp
-
+        ind = 2
         if year_comp == 0:
             fre_p = []
             ind = 1
         elif year_comp == 1:
             fre_p = np.array([0, 0.524, 0.158, 0.09])    
-            ind = 2
         elif year_comp == 2:
             fre_p = np.array([-0.0012, 0.552, 0.193, 0.031])    
-            ind = 2
         else:
-            fre_p = np.array([0.0010, 0.506, 0.097 , 0.161])    
-            ind = 2
-             
+            fre_p = np.array([0.0010, 0.506, 0.097 , 0.161])                 
         H1 = np.array(["theta_0", "theta_1", "theta_2", "theta_3"])        
-#        fre_p = np.array([0, 0.524, 0.158, 0.09])
-        coef = np.array(t.params)
-        
+        coef = np.array(t.params)        
         d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
         table = tabulate(d_p , headers = H1, floatfmt=".4f") 
-        return table          
+        return table              
     
-tab_1 = table_1(data_m[(data_m['year'] >= 1928) & (data_m['year'] <= 1952)  ] , 2)
-print(tab_1.table_comp())
+tab_1 = table_1(data_m[(data_m['year'] >= 1928) & (data_m['year'] <= 1984)] , 1)
+print(tab_1.table_comp_a())
 
 
 # %% ARCH model
