@@ -6,6 +6,8 @@ Created on Mon Nov 19 17:56:56 2018
 """
 import numpy as np
 import math
+import pandas as pd
+pd.options.display.float_format = '{:.3f}'.format
 
 arg1 = np.array([-0.159 , 0.073, -0.157, 0.063, 0.918, 0.121, -0.043])
 
@@ -44,14 +46,24 @@ print(np.sum(loglik))
 
 from prettytable import PrettyTable
 from prettytable import MSWORD_FRIENDLY
-
+from tabulate import tabulate
 
 x = PrettyTable()
 x.set_style(MSWORD_FRIENDLY)
 
 x.field_names = ["theta_0", "theta_1", "theta_2", "theta_3"]
 x.add_row(tab)
-x.int_format = "%{0:3f}"
+#x.int_format = ".3f"
+
+#print(x)    
+
+
+H1 = np.array(["theta_0", "theta_1", "theta_2", "theta_3"])
+fre_p = np.array([0.0, 0.524, 0.158, 0.09])
+data = np.concatenate((tab,fre_p),axis=0).reshape(2,-1)
+table = tabulate(data , headers = H1, floatfmt=".4f") 
+print(table)
+ 
 
 # https://github.com/vishvananda/prettytable
 # "%<{0:3f}>d
