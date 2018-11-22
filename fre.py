@@ -6,8 +6,8 @@ Created on Sun Oct 14 13:55:09 2018
 """
 
 
-import os
-os.chdir('C:\\Users\\s3179575\\LPR')
+#import os
+#os.chdir('C:\\Users\\s3179575\\LPR')
 
 import numpy as np
 import pandas as pd
@@ -17,16 +17,21 @@ import statsmodels.api as sm
 from statsmodels.tsa.arima_model import ARIMA
 from tabulate import tabulate
 from scipy.stats import skew
+from statsmodels.base.model import GenericLikelihoodModel
+import math 
+from scipy import stats
+
+# ** Daily data will be stored in the data frame data. This cotains the S&P returns, with the label Return_excD. 
+#    
+# ** Mointhly data will be stores in the data frame data_m. This contains the CRSP returns
 
 data = pd.read_table("sp500L.csv",sep=";")
 data['Date'] = pd.to_datetime(data.Date,format='%Y%m%d')
 data['year'] = data.Date.dt.year
 data['Return_excD'] = data['Return_excD']
 data['mm'] = data.Date.dt.month
-
-#data['Return'] = pd.DataFrame(((data.Close - data.Close.shift(1))/data.Close.shift(1))*100)  
-
-def var(a):
+# Calculations of daily volatility
+def var(a): 
     v = []
     c = []
     a = np.asarray(a)
@@ -40,28 +45,21 @@ data_m = pd.DataFrame(data.groupby(['year','mm'])['Return_excD'].agg(var)).reset
 data_m = data_m.rename(columns={'Return_excD':'volatility'})
 data_m['volatility_2'] = np.power(data_m['volatility'],2)
 
-data_m['Date'] = pd.to_datetime(dict(year=data_m.year, month=data_m.mm,day=1))
+data_m['Date'] = pd.to_datetime(dict(year=data_m.year, month=data_m.mm, day=1))
 data_m['Ln_vol'] = np.log(data_m['volatility'])
-#data_m['PC_vol'] = ((data_m.volatility - data_m.volatility.shift(1))/data_m.volatility.shift(1))*100  
 
-plt.plot(data_m.Date ,data_m.volatility)
+#   Estimation of the predicted volatility
 model = ARIMA(data_m['Ln_vol'],order=(0,1,3))
 model_fit = model.fit(disp=0)
-
 data_m['fit'] = model_fit.predict(typ='levels')
 data_m['fit'] = data_m['fit'].fillna(np.mean(data_m['fit']))
-
 data_m['std_fit'] = np.exp(data_m['fit']  + 0.5*np.var(model_fit.resid))
-plt.plot(data_m.Date ,data_m.std_fit)
-# %%
-#data_m = data_m.reset_index(drop=True)
-
-data_m.set_value(0,'std_fit' , data_m.iloc[0]['volatility'])
 data_m['Unp_std'] = data_m['volatility'] - data_m['std_fit']
-
 data_m['var_fit'] = np.exp(2*data_m['fit']  + 2*np.var(model_fit.resid))
-data_m.set_value(0,'var_fit' , data_m.iloc[0]['volatility_2'])
 data_m['Unp_var'] = data_m['volatility_2'] - data_m['var_fit']
+
+plt.plot(data_m.Date, data_m.volatility)
+plt.plot(data_m.Date ,data_m.std_fit)
 
 # %%
 class table_1(object):
@@ -126,88 +124,59 @@ tab_1 = table_1(data_m[(data_m['year'] >= 1928) & (data_m['year'] <= 1984)] , 1)
 print(tab_1.table_comp_a())
 
 
-# %% ARCH model
-
-#data = data[data['year'] >= 1953]
-
+# %% Treasury Bill data
 data_t = pd.read_table('Bonos.csv',sep=';')
 data_t['Date'] = pd.to_datetime(data_t.Date,format='%d-%m-%Y')
-data_t['year'] = data_t.Date.dt.year
+data_t['yy'] = data_t.Date.dt.year
 data_t['month'] = data_t.Date.dt.month
-data_t['select'] = data_t['year']*100 + data_t['month'] 
+data_t['select'] = data_t['yy']*100 + data_t['month'] 
 
-data_t = data_t[data_t['year'] <= 1984]
 data_c = pd.merge(data,data_t,on='Date')
 
-#data_c['Date'].idxmax()
-#df.loc[df['Value'].idxmax()]
+# Selecting the return of the last day of the month
+data_bo_m_1 =  data_c[data_c.groupby(['select'])['Date'].transform(max) == data_c['Date']]
+data_bo_m_1['Ind'] = data_bo_m_1.index 
+data_bo_m_1['w_day'] = data_bo_m_1['Ind'] - data_bo_m_1['Ind'].shift(1)
+data_bo_m_1.loc[19,'w_day'] = 19
+# Selecting the return of the last day of the month
+data_bo_m =  pd.DataFrame(data_c[data_c.groupby(['select'])['Date'].transform(max) == data_c['Date']]['DTB3'])
+data_bo_m = data_bo_m.rename(columns={'DTB3':'TB'})
+data_bo_m['TB'] =  data_bo_m['TB']/data_bo_m_1['w_day']
 
-#data_c.groupby(['select'])[['Date']].max().xs('DTB3',axis=1)
-data_bo_m =  data_c[data_c.groupby(['select'])['Date'].transform(max) == data_c['Date']]['DTB3']/100
-data_bo_m = data_bo_m.rename(columns={'DTB3':'st'})
 data_bo_m = data_bo_m.reindex(range(len(data_c)), method='bfill')
-
-data_c['tbil'] = data_bo_m/12 
-# test_df2.reset_index(name='maxvalue').to_string(index=False)
-
-
-# https://stackoverflow.com/questions/15705630/python-getting-the-row-which-has-the-max-value-in-groups-using-groupby
-
+data_c['tbil'] = data_bo_m
+#plt.plot(data_c.Date, data_c.tbil)
+#plt.plot(data_c.Date ,data_c.DTB3)
 
 # %%
-
 data_crsp = pd.read_table('crsp.csv',sep=',')
 data_crsp['Date'] = pd.to_datetime(data_crsp.date,format='%Y%m')
 data_crsp['crsp'] = data_crsp['Mkt-RF'] + data_crsp['RF']
 data_crsp = data_crsp.rename(columns={'Mkt-RF':'spread'})
-data_crsp['year'] = data_crsp.Date.dt.year
-
-data_RF = pd.DataFrame(data=np.array(data_crsp['RF'])/100, index=data_crsp['Date'])
+data_crsp['yy'] = data_crsp.Date.dt.year
+    
+data_RF = pd.DataFrame(data=np.array(data_crsp['RF']), index=data_crsp['Date'])
 data_RF_d = data_RF.reindex(data['Date'],method='bfill')
 
-#mean_crsp = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].crsp)
-mean_crsp_1 = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
-mean_crsp_2 = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1952)].spread)
-mean_crsp_3 = np.mean(data_crsp[(data_crsp['year']>=1953) & (data_crsp['year']<=1984)].spread)
+#mean_crsp_1 = np.mean(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
+#std_crsp_1 = np.std(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
 
-std_crsp_1 = np.std(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread)
-std_crsp_2 = np.std(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1952)].spread)
-std_crsp_3 = np.std(data_crsp[(data_crsp['year']>=1953) & (data_crsp['year']<=1984)].spread)
+plt.plot(data_RF_d.index,data_RF_d[0]/2)
+plt.plot(data_c.Date,data_c.tbil )
 
-# http://pbpython.com/python-vis-flowchart.html
-
-plt.plot(data_RF_d.index,data_RF_d[0])
-plt.plot(data_c.Date,data_c.tbil)
-
-data['RF'] = np.array(data_RF_d[0])
-data['spread'] = data['Return_excD'] - data['RF'] 
-
+data['RF'] = np.array(data_RF_d[0]/2)
+data['spread'] = data['Return_excD'] - data['RF']/100 
 
 # %%
-data = data[data['year'] <= 1984]
-data = data[data['year'] >= 1928]
-
 #from arch import arch_model
 #from arch.univariate import ConstantMean, GARCH, Normal
-from arch.univariate import ARX, GARCH, Normal
-
-am = ARX(data['spread'],lags=1)
-am.volatility = GARCH(2, 0, 1)
-am.distribution = Normal()
-
-res = am.fit()
-
-res.summary()
-
-# %%
-import numpy as np
-from scipy import stats
-from statsmodels.base.model import GenericLikelihoodModel
-import math 
-
-# (1/np.sqrt(scale*2*math.pi))*np.exp(-0.5*np.power((1-loc)/scale,2))
-    
-# Estimation of a GARCH model by ML.
+#from arch.univariate import ARX, GARCH, Normal
+#am = ARX(data['spread'],lags=1)
+#am.volatility = GARCH(2, 0, 1)
+#am.distribution = Normal()
+#res = am.fit()
+#res.summary()
+# %% # %% ARCH model (Estimation of a GARCH model by ML)
 
 def cun_pmf(x, mu, theta, a, b, c_1 , c_2):
     # compute residuals
@@ -224,7 +193,7 @@ def cun_pmf(x, mu, theta, a, b, c_1 , c_2):
             e[i] = x[i] - mu  
         else:
             sigt[i] = a + b*sigt[i-1] + c_1*e[i-1]*e[i-1] + c_2*e[i-2]*e[i-2];
-            e[i] = x[i] - mu -theta*e[i-1]
+            e[i] = x[i] - mu + theta*e[i-1]
             
         loglik[i] = -0.5*(np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i]);
                 
@@ -236,8 +205,7 @@ class arch_c(GenericLikelihoodModel):
             exog = np.zeros_like(endog)
             
         super(arch_c, self).__init__(endog, exog, **kwds)
-     
-    
+        
     def nloglikeobs(self, params):
         mu = params[0]
         theta = params[1]
@@ -258,66 +226,194 @@ class arch_c(GenericLikelihoodModel):
             
         return super(arch_c, self).fit(start_params=start_params, maxiter=maxiter, maxfun=maxfun, **kwds)
 
-model = arch_c(data['spread']*100)
-results = model.fit()
-results.summary()
+# %%
+class table_2(object):
+    def __init__(self, data, year_comp):
+        self.data = data
+        self.year_comp = year_comp        
+    def compt(self):
+        model = arch_c(self.data['spread']*100)
+        model_fit = model.fit()
+        return model_fit   
+    def table(self):
+        t = self.compt()
+        coef = np.array(t.params)
+        H1 = np.array(["alpha", "theta", "a", "b", "c_1" , "c_2"])
+        table = tabulate([coef], headers = H1, floatfmt=".4f") 
+        return table    
+    
+    def table_comp_a(self):
+        t = self.compt()
+        year_comp = self.year_comp
+        ind = 2
+        if year_comp == 0:
+            fre_p = []
+            ind = 1
+        elif year_comp == 1:
+            fre_p = np.array([0.000324, -0.157, 0.00000062, 0.919, 0.121, -0.044])    
+        elif year_comp == 2:
+            fre_p = np.array([0.000496, -0.090, 0.00000149, 0.898, 0.106, -0.012])    
+        else:
+            fre_p = np.array([0.000257, -0.211, 0.00000052, 0.922, 0.130, -0.060])    
+        H1 = np.array(["alpha", "theta", "a", "b", "c_1" , "c_2"])
+        coef = np.array(t.params)        
+        d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
+        table = tabulate(d_p , headers = H1, floatfmt=".4f") 
+        return table              
+    
+tab_2 = table_2(data[(data['year'] >= 1953) & (data['year'] <= 1984)] , 3)
+print(tab_2.table_comp_a())
+
+
 
 # %%
-data_m = data_m.reset_index(drop=True)
-data_m['spread'] = np.array(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread/100)
 
-#data_m = data_m[(data_m['year']>=1953) & (data_m['year']<=1984)]
-mean_crsp = np.mean(data_m['spread'])
-std_crsp = np.std(data_m['spread'])
+data_m_c = pd.merge(data_m,data_crsp,on='Date')
+data_m_c['spread'] = data_m_c['spread']/100
+#data_m = data_m.reset_index(drop=True)
+#data_m['spread'] = np.array(data_crsp[(data_crsp['year']>=1928) & (data_crsp['year']<=1984)].spread/100)
+
+mean_crsp = np.mean(data_m_c['spread'])
+std_crsp = np.std(data_m_c['spread'])
     
-mean_crsp_b = np.sum(data_m['spread']/data_m['volatility'])/(np.sum(1/data_m['volatility']))
-mean_crsp_c = np.sum(data_m['spread']/data_m['std_fit'])/(np.sum(1/data_m['std_fit']))
-# std_fit
+mean_crsp_b = np.sum(data_m_c['spread']/data_m_c['volatility'])/(np.sum(1/data_m_c['volatility']))
+mean_crsp_c = np.sum(data_m_c['spread']/data_m_c['std_fit'])/(np.sum(1/data_m_c['std_fit']))
 
-res_ols = sm.OLS(data_m['spread'], np.zeros(len(data_m['spread']))-1).fit()
+# std_fit
+res_ols = sm.OLS(data_m_c['spread'], np.zeros(len(data_m_c['spread']))).fit()
 print(res_ols.summary())
 
-mod_wls = sm.WLS(data_m['spread'], np.zeros(len(data_m['spread']))-1, weights=1./data_m['volatility'])
+mod_wls = sm.WLS(data_m_c['spread'], np.ones(len(data_m_c['spread'])), weights=1./data_m_c['volatility'])
 res_wls = mod_wls.fit()
 print(res_wls.summary())
 
+# %%
+
+class table_3(object):
+    def __init__(self, data, year_comp):
+        #self.f = f
+        self.data = data
+        self.year_comp = year_comp      
+        
+    def predic(self,S,E):
+        self.data = self.data[(self.data['year'] >= S) & (self.data['year'] <= E)]        
+        model = ARIMA(self.data['Ln_vol'] ,order=(0,1,3))
+        model_fit = model.fit(start_params = np.array([0, 0, 0, 0]) ,disp=0)       
+        
+        self.data['fit'] = model_fit.predict(typ='levels')
+        self.data['fit'] = self.data['fit'].fillna(np.mean(self.data['fit']))
+        self.data['std_fit'] = np.exp(self.data['fit']  + 0.5*np.var(model_fit.resid))
+        self.data['Unp_std'] = self.data['volatility'] - self.data['std_fit']
+        self.data['var_fit'] = np.exp(2*self.data['fit']  + 2*np.var(model_fit.resid))
+        self.data['Unp_var'] = self.data['volatility_2'] - self.data['var_fit']
+       
+    def table_comp_a(self):
+        year_comp = self.year_comp
+        ind = 2
+        S,E = 1928,1984
+        
+        if year_comp == 0:
+            fre_p = []
+            ind = 1
+            A,B = 1928,2017
+            S,E = 1928,2017
+        elif year_comp == 1:
+            fre_p = np.array([0.0061, 0.0116, 0.0055, 0.0579])
+            A,B = 1928,1984
+        elif year_comp == 2:
+            fre_p = np.array([0.0074, 0.0151, 0.0083, 0.0742])
+            A,B = 1928, 1952
+        else:
+            fre_p = np.array([0.0050, 0.0102 ,0.0044 ,0.0410]) 
+            A,B = 1953,1984
+        self.predic(S,E)            
+        self.data = self.data[(self.data['year'] >= A) & (self.data['year'] <= B)]            
+        mean = self.data.spread.mean()
+        std = self.data.spread.std()
+        WLS_b = np.sum(self.data['spread']/self.data['volatility'])/(np.sum(1/self.data['volatility']))
+        WLS_c = np.sum(self.data['spread']/self.data['std_fit'])/(np.sum(1/self.data['std_fit']))        
+        H1 = np.array(["Mean", "WLS b", "WLS c", "std dev"])        
+        coef = np.array([mean, WLS_b , WLS_c ,std])        
+        d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
+        table = tabulate(d_p , headers = H1, floatfmt=".4f") 
+        return table          
+
+tab_3 = table_3(data_m_c, 1)
+tab_3_1 = tab_3.table_comp_a()
+
 
 # %% Part 3     Estimating relations between risk premiums and volatility
+X = np.concatenate(( np.ones( (len(data_m_c['std_fit']),1)) , np.array(data_m_c['std_fit']).reshape(-1,1) ) , axis=1)
+y = np.array(data_m_c['spread'])
 
-#mod_wls = sm.WLS(data_m['spread'], data_m['std_fit'], weights=1./data_m['volatility'])
-#res_wls = mod_wls.fit()
-#print(res_wls.summary())
-
-#X = np.concatenate((np.array(data_m['std_fit']).reshape(684,1) , np.ones( (len(data_m['std_fit']),1))), axis=1)
-X = np.concatenate(( np.ones( (len(data_m['std_fit']),1)) , np.array(data_m['std_fit']).reshape(684,1) ) , axis=1)
-#X =  np.array(data_m['std_fit']).reshape(684,1) 
-y = np.array(data_m['spread'])
-#Om = np.diag(1/data_m['std_fit'])
-
-#beta_w = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X),Om),X)), np.matmul(np.matmul(np.transpose(X),Om),y) )
-#beta = np.matmul( np.linalg.inv(np.matmul(np.transpose(X),X)), np.matmul(np.transpose(X),y) )
-
-model_s = sm.WLS(y, X, weights = 1/data_m['std_fit'])
+model_s = sm.WLS(y, X, weights = 1/data_m_c['volatility'])
 results_s = model_s.fit()
 print(results_s.summary())
 
-      
-X_1 = np.concatenate(( np.ones( (len(data_m['std_fit']),1)) , np.array(data_m['std_fit']).reshape(684,1) , np.array(data_m['Unp_std']).reshape(684,1) ) , axis=1)
-#beta_1 = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_1),Om),X_1)), np.matmul(np.matmul(np.transpose(X_1),Om),y) )
-model_s_u = sm.WLS(y,X_1, weights = 1/data_m['std_fit'])
+X_1 = np.concatenate(( np.ones( (len(data_m_c['std_fit']),1)) , np.array(data_m_c['std_fit']).reshape(-1,1) , np.array(data_m_c['Unp_std']).reshape(-1,1) ) , axis=1)
+model_s_u = sm.WLS(y,X_1, weights = 1/data_m_c['volatility'])
 results_s_u = model_s_u.fit()
 print(results_s_u.summary())
 
+
+
+
+class table_4(object):
+    def __init__(self, data, year_comp):
+        self.data = data
+        self.year_comp = year_comp      
+        
+    def predic(self,S,E):
+        self.data = self.data[(self.data['year'] >= S) & (self.data['year'] <= E)]        
+        model = ARIMA(self.data['Ln_vol'] ,order=(0,1,3))
+        model_fit = model.fit(start_params = np.array([0, 0, 0, 0]) ,disp=0)       
+               
+    def table_comp_a(self):
+        year_comp = self.year_comp
+        ind = 2
+        S,E = 1928,1984
+        
+        if year_comp == 0:
+            fre_p = []
+            ind = 1
+            A,B = 1928,2017
+            S,E = 1928,2017
+        elif year_comp == 1:
+            fre_p = np.array([0.0047, 0.023, 0.0077 , -0.050 ,-1.010 ])
+            A,B = 1928,1984
+        elif year_comp == 2:
+            fre_p = np.array([0.0142, -0.133 , 0.0199 , -0.230 , -1.007])
+            A,B = 1928, 1952
+        else:
+            fre_p = np.array([0.0027, 0.055 ,0.0068 , -0.071, -1.045]) 
+            A,B = 1953,1984
+        self.predic(S,E)            
+        self.data = self.data[(self.data['year'] >= A) & (self.data['year'] <= B)]            
+        mean = self.data.spread.mean()
+        std = self.data.spread.std()
+        WLS_b = np.sum(self.data['spread']/self.data['volatility'])/(np.sum(1/self.data['volatility']))
+        WLS_c = np.sum(self.data['spread']/self.data['std_fit'])/(np.sum(1/self.data['std_fit']))    
+        
+        H1 = np.array(["alpha", "Beta", "alpha", "beta" , "gamma"])        
+        coef = np.array([mean, WLS_b , WLS_c ,std])        
+        d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
+        table = tabulate(d_p , headers = H1, floatfmt=".4f") 
+        return table          
+
+tab_4 = table_4(data_m_c, 1)
+tab_4_1 = tab_4.table_comp_a()
+
+
 # %%
 X_v = np.concatenate(( np.ones( (len(data_m['var_fit']),1)) , np.array(data_m['var_fit']).reshape(684,1) ) , axis=1)
-beta_v = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_v),Om),X_v)), np.matmul(np.matmul(np.transpose(X_v),Om),y) )
+#beta_v = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_v),Om),X_v)), np.matmul(np.matmul(np.transpose(X_v),Om),y) )
 
 model_v = sm.WLS(y, X_v, weights = 1/data_m['std_fit'])
 results_v = model_v.fit()
 print(results_v.summary())
      
 X_1 = np.concatenate(( np.ones( (len(data_m['var_fit']),1)) , np.array(data_m['var_fit']).reshape(684,1) , np.array(data_m['Unp_var']).reshape(684,1) ) , axis=1)
-beta_v_1 = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_1),Om),X_1)), np.matmul(np.matmul(np.transpose(X_1),Om),y) )
+#beta_v_1 = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_1),Om),X_1)), np.matmul(np.matmul(np.transpose(X_1),Om),y) )
 
 model_v_u = sm.WLS(y, X_1, weights = 1/data_m['std_fit'])
 results_v_u = model_v_u.fit()
