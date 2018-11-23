@@ -6,8 +6,8 @@ Created on Sun Oct 14 13:55:09 2018
 """
 
 
-#import os
-#os.chdir('C:\\Users\\s3179575\\LPR')
+import os
+os.chdir('C:\\Users\\s3179575\\LPR')
 
 import numpy as np
 import pandas as pd
@@ -48,18 +48,28 @@ data_m['volatility_2'] = np.power(data_m['volatility'],2)
 data_m['Date'] = pd.to_datetime(dict(year=data_m.year, month=data_m.mm, day=1))
 data_m['Ln_vol'] = np.log(data_m['volatility'])
 
+
+# %%
 #   Estimation of the predicted volatility
-model = ARIMA(data_m['Ln_vol'],order=(0,1,3))
+model = ARIMA(data_m[(data_m['Date']>'1927-11-01 00:00:00') & (data_m['year'] <= 1984)]['Ln_vol'],order=(0,1,3))
 model_fit = model.fit(disp=0)
-data_m['fit'] = model_fit.predict(typ='levels')
-data_m['fit'] = data_m['fit'].fillna(np.mean(data_m['fit']))
-data_m['std_fit'] = np.exp(data_m['fit']  + 0.5*np.var(model_fit.resid))
-data_m['Unp_std'] = data_m['volatility'] - data_m['std_fit']
-data_m['var_fit'] = np.exp(2*data_m['fit']  + 2*np.var(model_fit.resid))
-data_m['Unp_var'] = data_m['volatility_2'] - data_m['var_fit']
+data_m['fit_0'] = model_fit.predict(typ='levels')
+data_m['std_fit_0'] = np.exp(data_m['fit_0']  + 0.5*np.var(model_fit.resid))
+data_m['Unp_std_0'] = data_m['volatility'] - data_m['std_fit_0']
+data_m['var_fit_0'] = np.exp(2*data_m['fit_0']  + 2*np.var(model_fit.resid))
+data_m['Unp_var_0'] = data_m['volatility_2'] - data_m['var_fit_0']
+
+model_1 = ARIMA(data_m[(data_m['Date']>'1927-11-01 00:00:00')]['Ln_vol'],order=(0,1,3))
+model_fit_1 = model_1.fit(disp=0)
+data_m['fit_1'] = model_fit_1.predict(typ='levels')
+data_m['std_fit_1'] = np.exp(data_m['fit_1']  + 0.5*np.var(model_fit_1.resid))
+data_m['Unp_std_1'] = data_m['volatility'] - data_m['std_fit_1']
+data_m['var_fit_1'] = np.exp(2*data_m['fit_1']  + 2*np.var(model_fit_1.resid))
+data_m['Unp_var_1'] = data_m['volatility_2'] - data_m['var_fit_1']
+
 
 plt.plot(data_m.Date, data_m.volatility)
-plt.plot(data_m.Date ,data_m.std_fit)
+plt.plot(data_m.Date ,data_m.std_fit_0)
 
 # %%
 class table_1(object):
@@ -72,14 +82,6 @@ class table_1(object):
         model_fit = model.fit(start_params = np.array([0, 0, 0, 0]) ,disp=0)
         return model_fit
    
-    def table(self):
-        t = self.compt()
-        coef = np.array(t.params)
-        H1 = np.array(["theta_0", "theta_1", "theta_2", "theta_3"])
-        table = tabulate([coef], headers = H1, floatfmt=".4f") 
-        return table
-    
-    
     def table_comp_a(self):
         year_comp = self.year_comp        
         mean = self.data.volatility.mean()
@@ -227,6 +229,9 @@ class arch_c(GenericLikelihoodModel):
         return super(arch_c, self).fit(start_params=start_params, maxiter=maxiter, maxfun=maxfun, **kwds)
 
 # %%
+        
+
+    
 class table_2(object):
     def __init__(self, data, year_comp):
         self.data = data
@@ -266,6 +271,7 @@ print(tab_2.table_comp_a())
 
 
 
+
 # %%
 
 data_m_c = pd.merge(data_m,data_crsp,on='Date')
@@ -276,16 +282,16 @@ data_m_c['spread'] = data_m_c['spread']/100
 mean_crsp = np.mean(data_m_c['spread'])
 std_crsp = np.std(data_m_c['spread'])
     
-mean_crsp_b = np.sum(data_m_c['spread']/data_m_c['volatility'])/(np.sum(1/data_m_c['volatility']))
-mean_crsp_c = np.sum(data_m_c['spread']/data_m_c['std_fit'])/(np.sum(1/data_m_c['std_fit']))
+#mean_crsp_b = np.sum(data_m_c['spread']/data_m_c['volatility'])/(np.sum(1/data_m_c['volatility']))
+#mean_crsp_c = np.sum(data_m_c['spread']/data_m_c['std_fit'])/(np.sum(1/data_m_c['std_fit']))
 
 # std_fit
-res_ols = sm.OLS(data_m_c['spread'], np.zeros(len(data_m_c['spread']))).fit()
-print(res_ols.summary())
+#res_ols = sm.OLS(data_m_c['spread'], np.zeros(len(data_m_c['spread']))).fit()
+#print(res_ols.summary())
 
-mod_wls = sm.WLS(data_m_c['spread'], np.ones(len(data_m_c['spread'])), weights=1./data_m_c['volatility'])
-res_wls = mod_wls.fit()
-print(res_wls.summary())
+#mod_wls = sm.WLS(data_m_c['spread'], np.ones(len(data_m_c['spread'])), weights=1./data_m_c['volatility'])
+#res_wls = mod_wls.fit()
+#print(res_wls.summary())
 
 # %%
 
@@ -294,29 +300,18 @@ class table_3(object):
         #self.f = f
         self.data = data
         self.year_comp = year_comp      
-        
-    def predic(self,S,E):
-        self.data = self.data[(self.data['year'] >= S) & (self.data['year'] <= E)]        
-        model = ARIMA(self.data['Ln_vol'] ,order=(0,1,3))
-        model_fit = model.fit(start_params = np.array([0, 0, 0, 0]) ,disp=0)       
-        
-        self.data['fit'] = model_fit.predict(typ='levels')
-        self.data['fit'] = self.data['fit'].fillna(np.mean(self.data['fit']))
-        self.data['std_fit'] = np.exp(self.data['fit']  + 0.5*np.var(model_fit.resid))
-        self.data['Unp_std'] = self.data['volatility'] - self.data['std_fit']
-        self.data['var_fit'] = np.exp(2*self.data['fit']  + 2*np.var(model_fit.resid))
-        self.data['Unp_var'] = self.data['volatility_2'] - self.data['var_fit']
-       
+               
     def table_comp_a(self):
         year_comp = self.year_comp
         ind = 2
-        S,E = 1928,1984
+        std_est = 'std_fit_0'
         
         if year_comp == 0:
             fre_p = []
             ind = 1
             A,B = 1928,2017
-            S,E = 1928,2017
+            std_est = 'std_fit_1'
+            
         elif year_comp == 1:
             fre_p = np.array([0.0061, 0.0116, 0.0055, 0.0579])
             A,B = 1928,1984
@@ -326,12 +321,12 @@ class table_3(object):
         else:
             fre_p = np.array([0.0050, 0.0102 ,0.0044 ,0.0410]) 
             A,B = 1953,1984
-        self.predic(S,E)            
+
         self.data = self.data[(self.data['year'] >= A) & (self.data['year'] <= B)]            
         mean = self.data.spread.mean()
         std = self.data.spread.std()
         WLS_b = np.sum(self.data['spread']/self.data['volatility'])/(np.sum(1/self.data['volatility']))
-        WLS_c = np.sum(self.data['spread']/self.data['std_fit'])/(np.sum(1/self.data['std_fit']))        
+        WLS_c = np.sum(self.data['spread']/self.data[std_est])/(np.sum(1/self.data[std_est]))        
         H1 = np.array(["Mean", "WLS b", "WLS c", "std dev"])        
         coef = np.array([mean, WLS_b , WLS_c ,std])        
         d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
@@ -343,81 +338,92 @@ tab_3_1 = tab_3.table_comp_a()
 
 
 # %% Part 3     Estimating relations between risk premiums and volatility
-X = np.concatenate(( np.ones( (len(data_m_c['std_fit']),1)) , np.array(data_m_c['std_fit']).reshape(-1,1) ) , axis=1)
-y = np.array(data_m_c['spread'])
+data_m_c_a = data_m_c[(data_m_c['year'] >= 1928) & (data_m_c['year'] <= 1984)]
 
-model_s = sm.WLS(y, X, weights = 1/data_m_c['volatility'])
+X = np.concatenate(( np.ones( (len(data_m_c_a['var_fit_0']),1)) , np.array(data_m_c_a['std_fit_0']).reshape(-1,1) ) , axis=1)
+y = np.array(data_m_c_a['spread'])
+
+model_s = sm.WLS(y, X, weights = 1/data_m_c_a['volatility'])
 results_s = model_s.fit()
 print(results_s.summary())
 
-X_1 = np.concatenate(( np.ones( (len(data_m_c['std_fit']),1)) , np.array(data_m_c['std_fit']).reshape(-1,1) , np.array(data_m_c['Unp_std']).reshape(-1,1) ) , axis=1)
-model_s_u = sm.WLS(y,X_1, weights = 1/data_m_c['volatility'])
+X_1 = np.concatenate(( np.ones( (len(data_m_c_a['std_fit_0']),1)) , np.array(data_m_c_a['std_fit_0']).reshape(-1,1) , np.array(data_m_c_a['Unp_var_0']).reshape(-1,1) ) , axis=1)
+model_s_u = sm.WLS(y,X_1, weights = 1/data_m_c_a['volatility'])
 results_s_u = model_s_u.fit()
 print(results_s_u.summary())
 
+X_v = np.concatenate(( np.ones( (len(data_m_c_a['var_fit_0']),1)) , np.array(data_m_c_a['var_fit_0']).reshape(684,1) ) , axis=1)
+model_v = sm.WLS(y, X_v, weights = 1/data_m_c_a['std_fit_0'])
+results_v = model_v.fit()
+print(results_v.summary())
+     
+X_1 = np.concatenate(( np.ones( (len(data_m_c_a['var_fit_0']),1)) , np.array(data_m_c_a['var_fit_0']).reshape(684,1) , np.array(data_m_c_a['Unp_var']).reshape(684,1) ) , axis=1)
+model_v_u = sm.WLS(y, X_1, weights = 1/data_m_c_a['std_fit_0'])
+results_v_u = model_v_u.fit()
+print(results_v_u.summary())
 
 
+# %%
 
 class table_4(object):
     def __init__(self, data, year_comp):
         self.data = data
         self.year_comp = year_comp      
         
-    def predic(self,S,E):
-        self.data = self.data[(self.data['year'] >= S) & (self.data['year'] <= E)]        
-        model = ARIMA(self.data['Ln_vol'] ,order=(0,1,3))
-        model_fit = model.fit(start_params = np.array([0, 0, 0, 0]) ,disp=0)       
+    def predic(self, S, E, est):
+        # standard deviation
+        self.data = self.data[(self.data['year'] >= S) & (self.data['year'] <= E)]
+        X = np.concatenate(( np.ones( (len(self.data['std_fit_'+ est]),1)) , np.array(self.data['std_fit_'+ est]).reshape(-1,1) ) , axis=1)
+        y = np.array(self.data['spread'])        
+        model_s = sm.WLS(y, X, weights = 1/self.data['volatility'])
+        results_s = model_s.fit()
+
+        X_1 = np.concatenate(( np.ones( (len(self.data['std_fit_'+ est]),1)) , np.array(self.data['std_fit_'+ est]).reshape(-1,1) , np.array(self.data['Unp_std_'+est]).reshape(-1,1) ) , axis=1)
+        model_s_u = sm.WLS(y,X_1, weights = 1/self.data['volatility'])
+        results_s_u = model_s_u.fit()
+
+        # Variance deviation
+        self.data = self.data[(self.data['year'] >= S) & (self.data['year'] <= E)]
+        X_v = np.concatenate(( np.ones( (len(self.data['var_fit_'+ est]),1)) , np.array(self.data['var_fit_'+ est]).reshape(-1,1) ) , axis=1)
+        model_s_v = sm.WLS(y, X_v, weights = 1/self.data['volatility'])
+        results_s_v = model_s_v.fit()
+
+        X_1_v = np.concatenate(( np.ones( (len(self.data['var_fit_'+ est]),1)) , np.array(self.data['var_fit_'+ est]).reshape(-1,1) , np.array(self.data['Unp_var_'+est]).reshape(-1,1) ) , axis=1)
+        model_s_u_v = sm.WLS(y,X_1_v, weights = 1/self.data['volatility'])
+        results_s_u_v = model_s_u_v.fit()        
+        return np.concatenate((results_s.params , results_s_u.params , results_s_v.params , results_s_u_v.params)).reshape(2,5)
                
     def table_comp_a(self):
         year_comp = self.year_comp
-        ind = 2
-        S,E = 1928,1984
+        ind = 4
+        est = '0'
         
         if year_comp == 0:
             fre_p = []
-            ind = 1
-            A,B = 1928,2017
+            ind = 2
             S,E = 1928,2017
+            est = '1'
         elif year_comp == 1:
-            fre_p = np.array([0.0047, 0.023, 0.0077 , -0.050 ,-1.010 ])
-            A,B = 1928,1984
+            fre_p = np.array([[0.0047, 0.023, 0.0077 , -0.050 ,-1.010 ],[0.0050, 0.335, 0.0057 , 0.088 , -4.438 ]])
+            S,E = 1928,1984
         elif year_comp == 2:
-            fre_p = np.array([0.0142, -0.133 , 0.0199 , -0.230 , -1.007])
-            A,B = 1928, 1952
+            fre_p = np.array([[0.0142, -0.133 , 0.0199 , -0.230 , -1.007],[0.0092, -0.324 , 0.0144 , -0.671 , -3.985]])
+            S,E = 1928, 1952
         else:
-            fre_p = np.array([0.0027, 0.055 ,0.0068 , -0.071, -1.045]) 
-            A,B = 1953,1984
-        self.predic(S,E)            
-        self.data = self.data[(self.data['year'] >= A) & (self.data['year'] <= B)]            
-        mean = self.data.spread.mean()
-        std = self.data.spread.std()
-        WLS_b = np.sum(self.data['spread']/self.data['volatility'])/(np.sum(1/self.data['volatility']))
-        WLS_c = np.sum(self.data['spread']/self.data['std_fit'])/(np.sum(1/self.data['std_fit']))    
-        
+            fre_p = np.array([[0.0027, 0.055 ,0.0068 , -0.071, -1.045],[0.0031, 1.058 , 0.0046 , -0.349, -9.075]]) 
+            S,E = 1953,1984
+            
+        coef = self.predic(S,E, est)                    
         H1 = np.array(["alpha", "Beta", "alpha", "beta" , "gamma"])        
-        coef = np.array([mean, WLS_b , WLS_c ,std])        
-        d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
+        d_p = np.concatenate((fre_p[0],coef[0], fre_p[1], coef[1]),axis=0).reshape(ind,-1)
         table = tabulate(d_p , headers = H1, floatfmt=".4f") 
         return table          
 
-tab_4 = table_4(data_m_c, 1)
+tab_4 = table_4(data_m_c, 3)
 tab_4_1 = tab_4.table_comp_a()
+print(tab_4_1)
 
 
-# %%
-X_v = np.concatenate(( np.ones( (len(data_m['var_fit']),1)) , np.array(data_m['var_fit']).reshape(684,1) ) , axis=1)
-#beta_v = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_v),Om),X_v)), np.matmul(np.matmul(np.transpose(X_v),Om),y) )
-
-model_v = sm.WLS(y, X_v, weights = 1/data_m['std_fit'])
-results_v = model_v.fit()
-print(results_v.summary())
-     
-X_1 = np.concatenate(( np.ones( (len(data_m['var_fit']),1)) , np.array(data_m['var_fit']).reshape(684,1) , np.array(data_m['Unp_var']).reshape(684,1) ) , axis=1)
-#beta_v_1 = np.matmul( np.linalg.inv(np.matmul(np.matmul(np.transpose(X_1),Om),X_1)), np.matmul(np.matmul(np.transpose(X_1),Om),y) )
-
-model_v_u = sm.WLS(y, X_1, weights = 1/data_m['std_fit'])
-results_v_u = model_v_u.fit()
-print(results_v_u.summary())
 
 
 
@@ -443,8 +449,8 @@ def lik_g_m(x, mu,beta,theta,a,b,c_1,c_2):
             loglik[i] = -0.5*( np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i] )            
         else:
             sigt[i] = a + b*sigt[i-1] + c_1*e[i-1]*e[i-1] + c_2*e[i-2]*e[i-2] 
-#            e[i] = x[i] - mu - beta*np.sqrt(sigt[i]) + theta*e[i-1]
-            e[i] = x[i] - mu - beta*sigt[i] + theta*e[i-1]
+            e[i] = x[i] - mu - beta*np.sqrt(sigt[i]) + theta*e[i-1]
+#            e[i] = x[i] - mu - beta*sigt[i] + theta*e[i-1]
             loglik[i] = -0.5*( np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i] )
                 
     return -np.sum(loglik)
@@ -487,16 +493,60 @@ class garch_m(GenericLikelihoodModel):
         mean_0_r = mean_0.fit()
         mean_pa_0 = np.array(mean_0_r.params)        
         
-     #       start_params = np.concatenate([ [-0.001],[0.073],[-0.157] , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])        
-    #   start_params = np.array([ -0.001, 0.073, -0.157 , 0.00006 , 0.918 , 0.121, -0.043 ])        
-#        start_params = np.concatenate([ mean_pa_0 , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])
-        start_params = np.array([ 0.201, 2.41, -0.157 , 0.00006 , 0.918 , 0.121, -0.043 ])                    
+  #       start_params = np.concatenate([ [-0.001],[0.073],[-0.157] , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])        
+  #   start_params = np.array([ -0.001, 0.073, -0.157 , 0.00006 , 0.918 , 0.121, -0.043 ])        
+        start_params = np.concatenate([ mean_pa_0 , [gar_pa_0[1]] , [gar_pa_0[4]] , gar_pa_0[2:4]])
+ #       start_params = np.array([ 0.201, 2.41, -0.157 , 0.00006 , 0.918 , 0.121, -0.043 ])                    
         return super(garch_m, self).fit(start_params=start_params, maxiter=maxiter, maxfun = maxfun, **kwds)
 
 # %% table 5
-model_garch_sp = garch_m(data['spread']*100)
+data_5 = data[(data['year'] >= 1953) & (data['year'] <= 1984)]
+model_garch_sp = garch_m(data_5['spread']*100)
 results_g_sp = model_garch_sp.fit()
 results_g_sp.summary()
+
+# %%
+class table_5(object):
+    def __init__(self, data, year_comp):
+        self.data = data
+        self.year_comp = year_comp        
+    def compt(self):
+        model = arch_c(self.data['spread']*100)
+        model_fit = model.fit()
+        return model_fit   
+    def table(self):
+        t = self.compt()
+        coef = np.array(t.params)
+        H1 = np.array(["alpha", "theta", "a", "b", "c_1" , "c_2"])
+        table = tabulate([coef], headers = H1, floatfmt=".4f") 
+        return table    
+    
+    def table_comp_a(self):
+        t = self.compt()
+        year_comp = self.year_comp
+        ind = 2
+        if year_comp == 0:
+            fre_p = []
+            ind = 1
+        elif year_comp == 1:
+            fre_p = np.array([0.000324, -0.157, 0.00000062, 0.919, 0.121, -0.044])    
+        elif year_comp == 2:
+            fre_p = np.array([0.000496, -0.090, 0.00000149, 0.898, 0.106, -0.012])    
+        else:
+            fre_p = np.array([0.000257, -0.211, 0.00000052, 0.922, 0.130, -0.060])    
+        H1 = np.array(["alpha", "theta", "a", "b", "c_1" , "c_2"])
+        coef = np.array(t.params)        
+        d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
+        table = tabulate(d_p , headers = H1, floatfmt=".4f") 
+        return table              
+    
+tab_5 = table_5(data, 3)
+print(tab_5.table_comp_a())
+
+
+
+
+
 
 # %% table 6 a 
 
