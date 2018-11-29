@@ -399,7 +399,7 @@ class table_4(object):
         est = '0'
         
         if year_comp == 0:
-            fre_p = []
+            fre_p = np.array([[],[ ]])
             ind = 2
             S,E = 1928,2017
             est = '1'
@@ -419,7 +419,7 @@ class table_4(object):
         table = tabulate(d_p , headers = H1, floatfmt=".4f") 
         return table          
 
-tab_4 = table_4(data_m_c, 3)
+tab_4 = table_4(data_m_c, 0)
 tab_4_1 = tab_4.table_comp_a()
 print(tab_4_1)
 
@@ -449,8 +449,8 @@ def lik_g_m(x, mu,beta,theta,a,b,c_1,c_2):
             loglik[i] = -0.5*( np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i] )            
         else:
             sigt[i] = a + b*sigt[i-1] + c_1*e[i-1]*e[i-1] + c_2*e[i-2]*e[i-2] 
-            e[i] = x[i] - mu - beta*np.sqrt(sigt[i]) + theta*e[i-1]
-#            e[i] = x[i] - mu - beta*sigt[i] + theta*e[i-1]
+#            e[i] = x[i] - mu - beta*np.sqrt(sigt[i]) + theta*e[i-1]
+            e[i] = x[i] - mu - beta*sigt[i] + theta*e[i-1]
             loglik[i] = -0.5*( np.log(2*math.pi) + np.log(sigt[i]) + (e[i]*e[i])/sigt[i] )
                 
     return -np.sum(loglik)
@@ -500,7 +500,7 @@ class garch_m(GenericLikelihoodModel):
         return super(garch_m, self).fit(start_params=start_params, maxiter=maxiter, maxfun = maxfun, **kwds)
 
 # %% table 5
-data_5 = data[(data['year'] >= 1953) & (data['year'] <= 1984)]
+data_5 = data[(data['year'] >= 1928) & (data['year'] <= 1984)]
 model_garch_sp = garch_m(data_5['spread']*100)
 results_g_sp = model_garch_sp.fit()
 results_g_sp.summary()
@@ -510,8 +510,9 @@ class table_5(object):
     def __init__(self, data, year_comp):
         self.data = data
         self.year_comp = year_comp        
-    def compt(self):
-        model = arch_c(self.data['spread']*100)
+    def compt(self,S , E):
+        self.data =  self.data[(self.data['year'] >= S) & (self.data['year'] <= E)]
+        model = garch_m( self.data['spread']*100)
         model_fit = model.fit()
         return model_fit   
     def table(self):
@@ -522,29 +523,34 @@ class table_5(object):
         return table    
     
     def table_comp_a(self):
-        t = self.compt()
+       
         year_comp = self.year_comp
         ind = 2
         if year_comp == 0:
             fre_p = []
             ind = 1
+            S,E = 1928,2017
         elif year_comp == 1:
-            fre_p = np.array([0.000324, -0.157, 0.00000062, 0.919, 0.121, -0.044])    
+           # fre_p = np.array([-0.000159, 0.073, -0.157 ,0.063, 0.918, 0.121, -0.043])
+            S,E = 1928,1984
+            fre_p = np.array([0.201, 2.410,-0.157,0.063, 0.918, 0.121, -0.043 ]) 
         elif year_comp == 2:
-            fre_p = np.array([0.000496, -0.090, 0.00000149, 0.898, 0.106, -0.012])    
+            #fre_p = np.array([0.000100, 0.048, -0.090, 0.151, 0.897, 0.107, -0.011])
+            S,E = 1928,1952            
+            fre_p = np.array([0.377, 1.510, -0.090, 0.151, 0.897, 0.107, -0.012 ])
         else:
-            fre_p = np.array([0.000257, -0.211, 0.00000052, 0.922, 0.130, -0.060])    
+           # fre_p = np.array([0.000406, 0.112, -0.211 ,0.052, 0.922, 0.131, -0.061]) 
+            fre_p = np.array([-0.019, 7.220, -0.211, 0.052, 0.922, 0.131, -0.061 ])
+            S,E = 1952,1984            
         H1 = np.array(["alpha", "theta", "a", "b", "c_1" , "c_2"])
+        t = self.compt(S,E)         
         coef = np.array(t.params)        
         d_p = np.concatenate((fre_p,coef),axis=0).reshape(ind,-1)
         table = tabulate(d_p , headers = H1, floatfmt=".4f") 
         return table              
     
-tab_5 = table_5(data, 3)
+tab_5 = table_5(data, 0)
 print(tab_5.table_comp_a())
-
-
-
 
 
 
